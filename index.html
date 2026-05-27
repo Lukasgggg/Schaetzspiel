@@ -59,6 +59,12 @@
             color: var(--accent-color);
         }
 
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .btn-toggle {
             background-color: var(--accent-color);
             color: #ffffff;
@@ -68,6 +74,24 @@
             font-weight: bold;
             cursor: pointer;
             font-size: 0.9rem;
+        }
+
+        /* Das versteckte Symbol oben rechts */
+        .btn-secret {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-secret:hover {
+            background-color: #f1f2f6;
         }
 
         /* Eingabebereich */
@@ -119,15 +143,19 @@
             cursor: pointer;
         }
 
-        /* Auflösen Bereich */
+        /* Auflösen Bereich - JETZT STANDARDMÄßIG VERSTECKT */
         .solution-area {
             background-color: #f1f2f6;
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
-            display: flex;
+            display: none; /* Versteckt */
             flex-direction: column;
             gap: 8px;
+        }
+
+        .solution-area.visible {
+            display: flex; /* Wird sichtbar geschaltet */
         }
 
         .solution-row {
@@ -218,7 +246,10 @@
     <div class="app-container">
         <header>
             <h1>Live Schätzen 🎯</h1>
-            <button class="btn-toggle" id="togglePanelBtn">Hinzufügen</button>
+            <div class="header-actions">
+                <button class="btn-secret" id="secretBtn" title="Admin Bereich">🔒</button>
+                <button class="btn-toggle" id="togglePanelBtn">Hinzufügen</button>
+            </div>
         </header>
 
         <div class="input-panel" id="inputPanel">
@@ -229,7 +260,7 @@
             <button class="btn-submit" id="submitBtn">Eintragen (Enter)</button>
         </div>
 
-        <div class="solution-area">
+        <div class="solution-area" id="solutionArea">
             <div class="solution-row">
                 <span style="font-size: 0.9rem; font-weight: bold;">Lösung:</span>
                 <input type="number" id="correctValueInput" placeholder="Wert..." autocomplete="off">
@@ -244,7 +275,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, setDoc, updateDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Deine exakten Firebase-Daten eingebunden:
         const firebaseConfig = {
             apiKey: "AIzaSyAsViXTzXPG-OQqO90qwc3lTD4WWkFcE3k",
             authDomain: "schaetzspiel-1a65d.firebaseapp.com",
@@ -254,13 +284,14 @@
             appId: "1:279249786214:web:9e2e9667f7ec039f07a4a7"
         };
 
-        // Firebase initialisieren
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const docRef = doc(db, "schatzspiel", "aktuelle_runde");
 
         const togglePanelBtn = document.getElementById('togglePanelBtn');
+        const secretBtn = document.getElementById('secretBtn');
         const inputPanel = document.getElementById('inputPanel');
+        const solutionArea = document.getElementById('solutionArea');
         const nameInput = document.getElementById('nameInput');
         const guessInput = document.getElementById('guessInput');
         const submitBtn = document.getElementById('submitBtn');
@@ -275,6 +306,17 @@
             }
         });
 
+        // Klick auf das geheime Schloss-Symbol
+        secretBtn.addEventListener('click', () => {
+            // Zeigt das Popup-Fenster mit genau deinem Wunschtext
+            const checkUnbefugt = confirm("Prüfe ob wirklich niemand Unbefugtes zuschaut!");
+            
+            // Wenn der Admin auf "OK" klickt, wird das Lösungsfeld ein- oder ausgeblendet
+            if (checkUnbefugt) {
+                solutionArea.classList.toggle('visible');
+            }
+        });
+
         async function addParticipant() {
             const name = nameInput.value.trim();
             const guess = parseFloat(guessInput.value.trim());
@@ -285,12 +327,10 @@
             }
 
             try {
-                // Versuche den Tipp dem Live-Array hinzuzufügen
                 await updateDoc(docRef, {
                     players: arrayUnion({ name: name, guess: guess })
                 });
             } catch (error) {
-                // Falls das Dokument in der Datenbank noch nicht existiert, erstelle es neu
                 await setDoc(docRef, {
                     players: [{ name: name, guess: guess }],
                     correctValue: ""
@@ -315,10 +355,10 @@
             if(confirm("Möchtest du wirklich alle Tipps löschen und neu starten?")) {
                 await setDoc(docRef, { players: [], correctValue: "" });
                 correctValueInput.value = "";
+                solutionArea.classList.remove('visible'); // Schließt den Adminbereich wieder
             }
         });
 
-        // Echtzeit-Überwachung der Datenbank
         onSnapshot(docRef, (snapshot) => {
             if (!snapshot.exists()) {
                 setDoc(docRef, { players: [], correctValue: "" });
