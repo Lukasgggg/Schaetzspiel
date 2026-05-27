@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Schätzspiel (Light Mode)</title>
+    <title>Live Schätzspiel</title>
 
     <style>
         :root {
@@ -15,7 +15,7 @@
             --input-border: #dcdde1;     
             --success-color: #2ecc71;    
             --danger-color: #e74c3c;     
-            --primary-color: #3498db;    /* Schönes Blau für den Auswerten-Button */
+            --primary-color: #3498db;    
         }
 
         * {
@@ -34,7 +34,50 @@
             min-height: 100vh;
         }
 
-        /* Perfektes Hochformat fürs Smartphone */
+        /* Login & Rollenauswahl */
+        .setup-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .setup-container h2 {
+            margin-top: 0;
+            color: var(--text-color);
+        }
+
+        .btn-role {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            transition: transform 0.1s;
+        }
+
+        .btn-role:active {
+            transform: scale(0.98);
+        }
+
+        .btn-role.zuschauer {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-role.admin {
+            background-color: var(--text-color);
+            color: white;
+        }
+
+        /* Haupt-App-Container (Für Admin und Zuschauer-Rangliste) */
         .app-container {
             width: 100%;
             max-width: 450px; 
@@ -43,6 +86,7 @@
             padding: 20px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); 
             margin-top: 10px;
+            display: none; /* Wird per JS aktiviert */
         }
 
         header {
@@ -84,14 +128,9 @@
             cursor: pointer;
             padding: 8px;
             border-radius: 50%;
-            transition: background 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        .btn-secret:hover {
-            background-color: #f1f2f6;
         }
 
         /* Eingabebereich */
@@ -179,7 +218,6 @@
             font-size: 1rem;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(52, 152, 219, 0.2);
         }
 
         .btn-reset {
@@ -195,7 +233,7 @@
             margin-top: 5px;
         }
 
-        /* Liste der Schätzungen */
+        /* Listen-Ansichten */
         .entries-list {
             list-style: none;
             padding: 0;
@@ -254,14 +292,63 @@
             font-size: 0.75rem;
             color: #7f8c8d;
         }
+
+        /* === ZUSCHAUER LIVE-TICKER SCREEN === */
+        #spectatorLiveScreen {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .ticker-card {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            border-left: 5px solid var(--success-color);
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2c3e50;
+            animation: popIn 0.3s ease-out;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .no-activity {
+            color: #7f8c8d;
+            font-style: italic;
+            margin-top: 40px;
+            font-size: 1.1rem;
+        }
     </style>
 </head>
 <body>
 
-    <div class="app-container">
+    <div id="roleSelectionScreen" class="setup-container">
+        <h2>Bereit fürs Schätzspiel? 🎯</h2>
+        <p style="color: #7f8c8d; margin-bottom: 25px;">Bitte wähle deine Ansicht aus:</p>
+        <button class="btn-role zuschauer" id="chooseSpectatorBtn">📺 Zuschauer (PC / Monitor)</button>
+        <button class="btn-role admin" id="chooseAdminBtn">🔑 Admin (Spielleiter)</button>
+    </div>
+
+    <div id="passwordScreen" class="setup-container" style="display: none;">
+        <h2>Admin-Sicherheit</h2>
+        <p>Bitte gib das Admin-Passwort ein:</p>
+        <input type="password" id="passwordInput" placeholder="Passwort eingeben..." autocomplete="off" style="margin-bottom: 15px; text-align: center;">
+        <button class="btn-submit" id="loginBtn">Einloggen</button>
+        <button class="btn-reset" id="backToRolesBtn" style="background: none; color: #7f8c8d; margin-top: 10px;">Zurück</button>
+    </div>
+
+    <div class="app-container" id="mainAppContainer">
         <header>
-            <h1>Live Schätzen 🎯</h1>
-            <div class="header-actions">
+            <h1 id="appTitle">Live Schätzen 🎯</h1>
+            <div class="header-actions" id="adminActions" style="display: none;">
                 <button class="btn-secret" id="secretBtn" title="Admin Bereich">🔒</button>
                 <button class="btn-toggle" id="togglePanelBtn">Hinzufügen</button>
             </div>
@@ -287,6 +374,14 @@
         <ul class="entries-list" id="entriesList"></ul>
     </div>
 
+    <div id="spectatorLiveScreen">
+        <h1 style="color: var(--primary-color); margin-bottom: 5px;">Live-Ticker 📺</h1>
+        <p style="color: #7f8c8d; margin-bottom: 30px;">Hier siehst du, wer gerade abgegeben hat</p>
+        <div id="tickerBox"></div>
+        <div id="noActivityMsg" class="no-activity">Warte auf Schätzungen... ⏳</div>
+    </div>
+
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, setDoc, updateDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -304,6 +399,26 @@
         const db = getFirestore(app);
         const docRef = doc(db, "schatzspiel", "aktuelle_runde");
 
+        // Rollen-Status
+        let currentRole = ""; // "admin" oder "spectator"
+        let knownPlayers = new Set(); // Speichert bereits bekannte Spieler im Ticker
+        let isInitialLoad = true; // Verhindert Massen-Popups beim Laden des Tickers
+
+        // DOM Elemente
+        const roleSelectionScreen = document.getElementById('roleSelectionScreen');
+        const chooseSpectatorBtn = document.getElementById('chooseSpectatorBtn');
+        const chooseAdminBtn = document.getElementById('chooseAdminBtn');
+        const passwordScreen = document.getElementById('passwordScreen');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const backToRolesBtn = document.getElementById('backToRolesBtn');
+        const mainAppContainer = document.getElementById('mainAppContainer');
+        const spectatorLiveScreen = document.getElementById('spectatorLiveScreen');
+        const tickerBox = document.getElementById('tickerBox');
+        const noActivityMsg = document.getElementById('noActivityMsg');
+        const adminActions = document.getElementById('adminActions');
+        const appTitle = document.getElementById('appTitle');
+
         const togglePanelBtn = document.getElementById('togglePanelBtn');
         const secretBtn = document.getElementById('secretBtn');
         const inputPanel = document.getElementById('inputPanel');
@@ -316,18 +431,50 @@
         const entriesList = document.getElementById('entriesList');
         const resetBtn = document.getElementById('resetBtn');
 
+        // === NAVIGATION & LOGIN LOGIK ===
+        chooseSpectatorBtn.addEventListener('click', () => {
+            currentRole = "spectator";
+            roleSelectionScreen.style.display = "none";
+            spectatorLiveScreen.style.display = "block"; // Zuerst Ticker zeigen
+        });
+
+        chooseAdminBtn.addEventListener('click', () => {
+            roleSelectionScreen.style.display = "none";
+            passwordScreen.style.display = "block";
+            passwordInput.focus();
+        });
+
+        backToRolesBtn.addEventListener('click', () => {
+            passwordScreen.style.display = "none";
+            roleSelectionScreen.style.display = "block";
+            passwordInput.value = "";
+        });
+
+        function checkPassword() {
+            if (passwordInput.value === "12345678") {
+                currentRole = "admin";
+                passwordScreen.style.display = "none";
+                mainAppContainer.style.display = "block";
+                adminActions.style.display = "flex"; // Zeige Admin-Buttons im Header
+                appTitle.innerText = "Spielleiter Panel 🛠️";
+            } else {
+                alert("Falsches Passwort! Tipp: 12345678");
+                passwordInput.value = "";
+                passwordInput.focus();
+            }
+        }
+        loginBtn.addEventListener('click', checkPassword);
+        passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
+
+        // === ADMIN LOGIK (AUS ALTEN CODES) ===
         togglePanelBtn.addEventListener('click', () => {
             inputPanel.classList.toggle('active');
-            if (inputPanel.classList.contains('active')) {
-                nameInput.focus();
-            }
+            if (inputPanel.classList.contains('active')) nameInput.focus();
         });
 
         secretBtn.addEventListener('click', () => {
             const checkUnbefugt = confirm("Prüfe ob wirklich niemand Unbefugtes zuschaut!");
-            if (checkUnbefugt) {
-                solutionArea.classList.toggle('visible');
-            }
+            if (checkUnbefugt) solutionArea.classList.toggle('visible');
         });
 
         async function addParticipant() {
@@ -356,7 +503,6 @@
             nameInput.focus();
         }
 
-        // Erst beim Klick auf den Button wird das Ergebnis in Firebase scharf geschaltet!
         evaluateBtn.addEventListener('click', async () => {
             const val = correctValueInput.value.trim();
             if (val === "") {
@@ -379,6 +525,31 @@
             }
         });
 
+        // === LIVE-TICKER FUNKTION (10 SEKUNDEN ANZEIGE) ===
+        function triggerTickerNotification(name) {
+            // Erstelle die Ticker-Karte im DOM
+            const card = document.createElement('div');
+            card.className = 'ticker-card';
+            card.innerHTML = `🎉 ${name} hat abgegeben! ✅`;
+            
+            tickerBox.appendChild(card);
+            noActivityMsg.style.display = "none"; // "Warte auf Schätzungen" ausblenden
+
+            // Nach exakt 10 Sekunden (10000ms) sanft entfernen
+            setTimeout(() => {
+                card.style.transition = "opacity 0.5s ease";
+                card.style.opacity = "0";
+                setTimeout(() => {
+                    card.remove();
+                    // Wenn keine Karten mehr da sind, zeige wieder die Standardmeldung
+                    if (tickerBox.children.length === 0) {
+                        noActivityMsg.style.display = "block";
+                    }
+                }, 500);
+            }, 10000);
+        }
+
+        // === DATENBANK-SYNC (ONSNAPSHOT) ===
         onSnapshot(docRef, (snapshot) => {
             if (!snapshot.exists()) {
                 setDoc(docRef, { players: [], correctValue: "", showResults: false });
@@ -388,19 +559,51 @@
             const data = snapshot.data();
             const players = data.players || [];
             const correctValue = parseFloat(data.correctValue);
-            
-            // Nur auswerten, wenn showResults in Firebase auf true steht
             const hasSolution = data.showResults === true && !isNaN(correctValue);
 
+            // Gucken, ob Daten gelöscht/zurückgesetzt wurden
+            if (players.length === 0) {
+                knownPlayers.clear();
+                tickerBox.innerHTML = "";
+                noActivityMsg.style.display = "block";
+            }
+
+            // Erkennen, wer NEU abgegeben hat
+            players.forEach(player => {
+                const uniqueKey = player.name + "_" + player.guess;
+                if (!knownPlayers.has(uniqueKey)) {
+                    knownPlayers.add(uniqueKey);
+                    // Nur triggern, wenn es nicht der allererste Ladevorgang beim Einschalten ist
+                    if (!isInitialLoad) {
+                        triggerTickerNotification(player.name);
+                    }
+                }
+            });
+            isInitialLoad = false;
+
+            // ZUSCHAUER CONTROL: Sobald ausgewertet wird, schaltet der Zuschauer-Bildschirm zur Rangliste um!
+            if (currentRole === "spectator") {
+                if (hasSolution) {
+                    spectatorLiveScreen.style.display = "none";
+                    mainAppContainer.style.display = "block";
+                    appTitle.innerText = "🏆 Endergebnis 🏆";
+                } else {
+                    spectatorLiveScreen.style.display = "block";
+                    mainAppContainer.style.display = "none";
+                }
+            }
+
+            // Formular-Fokus-Schutz für Admins
             if (document.activeElement !== correctValueInput && !data.showResults) {
                 correctValueInput.value = data.correctValue !== undefined ? data.correctValue : "";
             }
 
-            // Nur sortieren, wenn der Auswerten-Button gedrückt wurde
+            // Rangliste sortieren, falls ausgewertet wurde
             if (hasSolution) {
                 players.sort((a, b) => Math.abs(a.guess - correctValue) - Math.abs(b.guess - correctValue));
             }
 
+            // Ranglisten HTML zeichnen
             entriesList.innerHTML = '';
             players.forEach((player, index) => {
                 const li = document.createElement('li');
@@ -415,12 +618,17 @@
                     diffHtml = `<span class="difference-text">Abweichung: ${diff}</span>`;
                 }
 
+                // Zuschauer sieht die genauen Tipps ERST, wenn die Runde ausgewertet ist!
+                const hideValue = (currentRole === "spectator" && !hasSolution);
+
                 li.innerHTML = `
                     <span class="entry-name">
                         ${player.name} ${isWinner ? '<span class="badge-winner">Platz 1</span>' : ''}
                     </span>
                     <div class="entry-details">
-                        <span class="entry-value">${player.guess}</span>
+                        <span class="entry-value" style="${hideValue ? 'background-color: #bdc3c7;' : ''}">
+                            ${hideValue ? '???' : player.guess}
+                        </span>
                         ${diffHtml}
                     </div>
                 `;
