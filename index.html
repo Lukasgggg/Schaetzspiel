@@ -15,6 +15,7 @@
             --input-border: #dcdde1;     
             --success-color: #2ecc71;    
             --danger-color: #e74c3c;     
+            --primary-color: #3498db;    /* Schönes Blau für den Auswerten-Button */
         }
 
         * {
@@ -76,7 +77,6 @@
             font-size: 0.9rem;
         }
 
-        /* Das versteckte Symbol oben rechts */
         .btn-secret {
             background: none;
             border: none;
@@ -143,19 +143,19 @@
             cursor: pointer;
         }
 
-        /* Auflösen Bereich - JETZT STANDARDMÄßIG VERSTECKT */
+        /* Auflösen Bereich */
         .solution-area {
             background-color: #f1f2f6;
             padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
-            display: none; /* Versteckt */
+            display: none; 
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
 
         .solution-area.visible {
-            display: flex; /* Wird sichtbar geschaltet */
+            display: flex; 
         }
 
         .solution-row {
@@ -169,15 +169,30 @@
             background-color: #ffffff;
         }
 
+        .btn-evaluate {
+            width: 100%;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(52, 152, 219, 0.2);
+        }
+
         .btn-reset {
+            width: 100%;
             background-color: var(--danger-color);
             color: white;
             border: none;
-            padding: 8px;
-            border-radius: 6px;
+            padding: 10px;
+            border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
             font-size: 0.85rem;
+            margin-top: 5px;
         }
 
         /* Liste der Schätzungen */
@@ -255,7 +270,7 @@
         <div class="input-panel" id="inputPanel">
             <div class="input-group">
                 <input type="text" id="nameInput" placeholder="Name (z.B. Lukas)" autocomplete="off">
-                <input type="number" id="guessInput" placeholder="Tipp (z.B. 134)" autocomplete="off">
+                <input type="number" id="guessInput" placeholder="Tipp (z.B. 134)" inputmode="decimal" autocomplete="off">
             </div>
             <button class="btn-submit" id="submitBtn">Eintragen (Enter)</button>
         </div>
@@ -263,8 +278,9 @@
         <div class="solution-area" id="solutionArea">
             <div class="solution-row">
                 <span style="font-size: 0.9rem; font-weight: bold;">Lösung:</span>
-                <input type="number" id="correctValueInput" placeholder="Wert..." autocomplete="off">
+                <input type="number" id="correctValueInput" placeholder="Wert..." inputmode="decimal" autocomplete="off">
             </div>
+            <button class="btn-evaluate" id="evaluateBtn">Jetzt Auswerten 🚀</button>
             <button class="btn-reset" id="resetBtn">Runde zurücksetzen (Alles löschen)</button>
         </div>
 
@@ -296,6 +312,7 @@
         const guessInput = document.getElementById('guessInput');
         const submitBtn = document.getElementById('submitBtn');
         const correctValueInput = document.getElementById('correctValueInput');
+        const evaluateBtn = document.getElementById('evaluateBtn');
         const entriesList = document.getElementById('entriesList');
         const resetBtn = document.getElementById('resetBtn');
 
@@ -306,12 +323,8 @@
             }
         });
 
-        // Klick auf das geheime Schloss-Symbol
         secretBtn.addEventListener('click', () => {
-            // Zeigt das Popup-Fenster mit genau deinem Wunschtext
             const checkUnbefugt = confirm("Prüfe ob wirklich niemand Unbefugtes zuschaut!");
-            
-            // Wenn der Admin auf "OK" klickt, wird das Lösungsfeld ein- oder ausgeblendet
             if (checkUnbefugt) {
                 solutionArea.classList.toggle('visible');
             }
@@ -333,7 +346,8 @@
             } catch (error) {
                 await setDoc(docRef, {
                     players: [{ name: name, guess: guess }],
-                    correctValue: ""
+                    correctValue: "",
+                    showResults: false
                 });
             }
 
@@ -342,38 +356,47 @@
             nameInput.focus();
         }
 
-        correctValueInput.addEventListener('input', async () => {
+        // Erst beim Klick auf den Button wird das Ergebnis in Firebase scharf geschaltet!
+        evaluateBtn.addEventListener('click', async () => {
             const val = correctValueInput.value.trim();
+            if (val === "") {
+                alert("Bitte trag zuerst einen Lösungswert ein!");
+                return;
+            }
             try {
                 await updateDoc(docRef, {
-                    correctValue: val !== "" ? parseFloat(val) : ""
+                    correctValue: parseFloat(val),
+                    showResults: true
                 });
             } catch (e) {}
         });
 
         resetBtn.addEventListener('click', async () => {
             if(confirm("Möchtest du wirklich alle Tipps löschen und neu starten?")) {
-                await setDoc(docRef, { players: [], correctValue: "" });
+                await setDoc(docRef, { players: [], correctValue: "", showResults: false });
                 correctValueInput.value = "";
-                solutionArea.classList.remove('visible'); // Schließt den Adminbereich wieder
+                solutionArea.classList.remove('visible'); 
             }
         });
 
         onSnapshot(docRef, (snapshot) => {
             if (!snapshot.exists()) {
-                setDoc(docRef, { players: [], correctValue: "" });
+                setDoc(docRef, { players: [], correctValue: "", showResults: false });
                 return;
             }
 
             const data = snapshot.data();
             const players = data.players || [];
             const correctValue = parseFloat(data.correctValue);
-            const hasSolution = !isNaN(correctValue);
+            
+            // Nur auswerten, wenn showResults in Firebase auf true steht
+            const hasSolution = data.showResults === true && !isNaN(correctValue);
 
-            if (document.activeElement !== correctValueInput) {
+            if (document.activeElement !== correctValueInput && !data.showResults) {
                 correctValueInput.value = data.correctValue !== undefined ? data.correctValue : "";
             }
 
+            // Nur sortieren, wenn der Auswerten-Button gedrückt wurde
             if (hasSolution) {
                 players.sort((a, b) => Math.abs(a.guess - correctValue) - Math.abs(b.guess - correctValue));
             }
