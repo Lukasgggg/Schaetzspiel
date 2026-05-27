@@ -67,6 +67,11 @@
             transform: scale(0.98);
         }
 
+        .btn-role.spieler {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
         .btn-role.zuschauer {
             background-color: var(--primary-color);
             color: white;
@@ -77,7 +82,7 @@
             color: white;
         }
 
-        /* Haupt-App-Container (Für Admin und Zuschauer-Rangliste) */
+        /* Haupt-App-Container */
         .app-container {
             width: 100%;
             max-width: 450px; 
@@ -86,7 +91,7 @@
             padding: 20px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); 
             margin-top: 10px;
-            display: none; /* Wird per JS aktiviert */
+            display: none; 
         }
 
         header {
@@ -333,6 +338,7 @@
     <div id="roleSelectionScreen" class="setup-container">
         <h2>Bereit fürs Schätzspiel? 🎯</h2>
         <p style="color: #7f8c8d; margin-bottom: 25px;">Bitte wähle deine Ansicht aus:</p>
+        <button class="btn-role spieler" id="choosePlayerBtn">📱 Spieler (Tipp abgeben)</button>
         <button class="btn-role zuschauer" id="chooseSpectatorBtn">📺 Zuschauer (PC / Monitor)</button>
         <button class="btn-role admin" id="chooseAdminBtn">🔑 Admin (Spielleiter)</button>
     </div>
@@ -399,13 +405,15 @@
         const db = getFirestore(app);
         const docRef = doc(db, "schatzspiel", "aktuelle_runde");
 
-        // Rollen-Status
-        let currentRole = ""; // "admin" oder "spectator"
-        let knownPlayers = new Set(); // Speichert bereits bekannte Spieler im Ticker
-        let isInitialLoad = true; // Verhindert Massen-Popups beim Laden des Tickers
+        // Globale Statusvariablen
+        let currentRole = ""; 
+        let databaseData = null; 
+        let knownPlayers = new Set(); 
+        let isInitialLoad = true; 
 
         // DOM Elemente
         const roleSelectionScreen = document.getElementById('roleSelectionScreen');
+        const choosePlayerBtn = document.getElementById('choosePlayerBtn');
         const chooseSpectatorBtn = document.getElementById('chooseSpectatorBtn');
         const chooseAdminBtn = document.getElementById('chooseAdminBtn');
         const passwordScreen = document.getElementById('passwordScreen');
@@ -431,11 +439,115 @@
         const entriesList = document.getElementById('entriesList');
         const resetBtn = document.getElementById('resetBtn');
 
-        // === NAVIGATION & LOGIN LOGIK ===
+        // === ZENTRALE UNTERSTÜTZUNG FÜR SMART-SCREEN REFRESHES ===
+        function renderUI() {
+            if (!databaseData) return;
+
+            const players = databaseData.players || [];
+            const correctValue = parseFloat(databaseData.correctValue);
+            const hasSolution = databaseData.showResults === true && !isNaN(correctValue);
+
+            // Startbildschirm-Reset
+            if (currentRole === "") {
+                roleSelectionScreen.style.display = "block";
+                passwordScreen.style.display = "none";
+                mainAppContainer.style.display = "none";
+                spectatorLiveScreen.style.display = "none";
+                return;
+            }
+
+            // A: Logik für Zuschauer
+            if (currentRole === "spectator") {
+                roleSelectionScreen.style.display = "none";
+                if (hasSolution) {
+                    spectatorLiveScreen.style.display = "none";
+                    mainAppContainer.style.display = "block";
+                    appTitle.innerText = "🏆 Endergebnis 🏆";
+                    adminActions.style.display = "none";
+                    solutionArea.classList.remove('visible');
+                    inputPanel.classList.remove('active');
+                } else {
+                    spectatorLiveScreen.style.display = "block";
+                    mainAppContainer.style.display = "none";
+                }
+            }
+
+            // B: Logik für normale Spieler (Klassenkameraden auf dem Handy)
+            if (currentRole === "player") {
+                roleSelectionScreen.style.display = "none";
+                mainAppContainer.style.display = "block";
+                spectatorLiveScreen.style.display = "none";
+                appTitle.innerText = hasSolution ? "🏆 Endergebnis 🏆" : "Live Schätzen 🎯";
+                adminActions.style.display = "none"; 
+                solutionArea.classList.remove('visible'); 
+                
+                if (hasSolution) {
+                    inputPanel.classList.remove('active'); 
+                } else {
+                    inputPanel.classList.add('active'); // Spieler kriegt das Feld sofort offen präsentiert
+                }
+            }
+
+            // C: Logik für den Admin
+            if (currentRole === "admin") {
+                roleSelectionScreen.style.display = "none";
+                mainAppContainer.style.display = "block";
+                spectatorLiveScreen.style.display = "none";
+                appTitle.innerText = "Spielleiter Panel 🛠️";
+                adminActions.style.display = "flex";
+                
+                if (document.activeElement !== correctValueInput && !databaseData.showResults) {
+                    correctValueInput.value = databaseData.correctValue !== undefined ? databaseData.correctValue : "";
+                }
+            }
+
+            // D: Ranglisten-Sortierung und Auslese
+            const displayPlayers = [...players];
+            if (hasSolution) {
+                displayPlayers.sort((a, b) => Math.abs(a.guess - correctValue) - Math.abs(b.guess - correctValue));
+            }
+
+            entriesList.innerHTML = '';
+            displayPlayers.forEach((player, index) => {
+                const li = document.createElement('li');
+                li.className = 'entry-item';
+                
+                const isWinner = hasSolution && index === 0;
+                if (isWinner) li.classList.add('winner');
+
+                let diffHtml = '';
+                if (hasSolution) {
+                    const diff = Math.abs(player.guess - correctValue);
+                    diffHtml = `<span class="difference-text">Abweichung: ${diff}</span>`;
+                }
+
+                // Werte verbergen für Zuschauer & Spieler solange nicht ausgewertet wurde
+                const hideValue = (currentRole !== "admin" && !hasSolution);
+
+                li.innerHTML = `
+                    <span class="entry-name">
+                        ${player.name} ${isWinner ? '<span class="badge-winner">Platz 1</span>' : ''}
+                    </span>
+                    <div class="entry-details">
+                        <span class="entry-value" style="${hideValue ? 'background-color: #bdc3c7;' : ''}">
+                            ${hideValue ? '???' : player.guess}
+                        </span>
+                        ${diffHtml}
+                    </div>
+                `;
+                entriesList.appendChild(li);
+            });
+        }
+
+        // === NAVIGATION LISTENERS ===
+        choosePlayerBtn.addEventListener('click', () => {
+            currentRole = "player";
+            renderUI();
+        });
+
         chooseSpectatorBtn.addEventListener('click', () => {
             currentRole = "spectator";
-            roleSelectionScreen.style.display = "none";
-            spectatorLiveScreen.style.display = "block"; // Zuerst Ticker zeigen
+            renderUI();
         });
 
         chooseAdminBtn.addEventListener('click', () => {
@@ -454,9 +566,7 @@
             if (passwordInput.value === "12345678") {
                 currentRole = "admin";
                 passwordScreen.style.display = "none";
-                mainAppContainer.style.display = "block";
-                adminActions.style.display = "flex"; // Zeige Admin-Buttons im Header
-                appTitle.innerText = "Spielleiter Panel 🛠️";
+                renderUI();
             } else {
                 alert("Falsches Passwort! Tipp: 12345678");
                 passwordInput.value = "";
@@ -466,7 +576,7 @@
         loginBtn.addEventListener('click', checkPassword);
         passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
 
-        // === ADMIN LOGIK (AUS ALTEN CODES) ===
+        // === FIREBASE INTERAKTIONEN ===
         togglePanelBtn.addEventListener('click', () => {
             inputPanel.classList.toggle('active');
             if (inputPanel.classList.contains('active')) nameInput.focus();
@@ -500,7 +610,12 @@
 
             nameInput.value = '';
             guessInput.value = '';
-            nameInput.focus();
+            
+            if (currentRole === "player") {
+                alert("Dein Tipp wurde erfolgreich abgesendet! Schau auf den großen Bildschirm. 🎉");
+            } else {
+                nameInput.focus();
+            }
         }
 
         evaluateBtn.addEventListener('click', async () => {
@@ -521,59 +636,54 @@
             if(confirm("Möchtest du wirklich alle Tipps löschen und neu starten?")) {
                 await setDoc(docRef, { players: [], correctValue: "", showResults: false });
                 correctValueInput.value = "";
-                solutionArea.classList.remove('visible'); 
+                if(currentRole === "admin") solutionArea.classList.remove('visible'); 
             }
         });
 
-        // === LIVE-TICKER FUNKTION (10 SEKUNDEN ANZEIGE) ===
+        // === LIVE-TICKER COUNTER LOGIK ===
         function triggerTickerNotification(name) {
-            // Erstelle die Ticker-Karte im DOM
             const card = document.createElement('div');
             card.className = 'ticker-card';
             card.innerHTML = `🎉 ${name} hat abgegeben! ✅`;
             
             tickerBox.appendChild(card);
-            noActivityMsg.style.display = "none"; // "Warte auf Schätzungen" ausblenden
+            if (noActivityMsg) noActivityMsg.style.display = "none";
 
-            // Nach exakt 10 Sekunden (10000ms) sanft entfernen
             setTimeout(() => {
                 card.style.transition = "opacity 0.5s ease";
                 card.style.opacity = "0";
                 setTimeout(() => {
                     card.remove();
-                    // Wenn keine Karten mehr da sind, zeige wieder die Standardmeldung
-                    if (tickerBox.children.length === 0) {
+                    if (tickerBox.children.length === 0 && noActivityMsg) {
                         noActivityMsg.style.display = "block";
                     }
                 }, 500);
             }, 10000);
         }
 
-        // === DATENBANK-SYNC (ONSNAPSHOT) ===
+        // === LIVE DATABASE-SYNC ===
         onSnapshot(docRef, (snapshot) => {
             if (!snapshot.exists()) {
-                setDoc(docRef, { players: [], correctValue: "", showResults: false });
+                const startData = { players: [], correctValue: "", showResults: false };
+                setDoc(docRef, startData);
+                databaseData = startData;
+                renderUI();
                 return;
             }
 
             const data = snapshot.data();
             const players = data.players || [];
-            const correctValue = parseFloat(data.correctValue);
-            const hasSolution = data.showResults === true && !isNaN(correctValue);
 
-            // Gucken, ob Daten gelöscht/zurückgesetzt wurden
             if (players.length === 0) {
                 knownPlayers.clear();
                 tickerBox.innerHTML = "";
-                noActivityMsg.style.display = "block";
+                if (noActivityMsg) noActivityMsg.style.display = "block";
             }
 
-            // Erkennen, wer NEU abgegeben hat
             players.forEach(player => {
                 const uniqueKey = player.name + "_" + player.guess;
                 if (!knownPlayers.has(uniqueKey)) {
                     knownPlayers.add(uniqueKey);
-                    // Nur triggern, wenn es nicht der allererste Ladevorgang beim Einschalten ist
                     if (!isInitialLoad) {
                         triggerTickerNotification(player.name);
                     }
@@ -581,59 +691,8 @@
             });
             isInitialLoad = false;
 
-            // ZUSCHAUER CONTROL: Sobald ausgewertet wird, schaltet der Zuschauer-Bildschirm zur Rangliste um!
-            if (currentRole === "spectator") {
-                if (hasSolution) {
-                    spectatorLiveScreen.style.display = "none";
-                    mainAppContainer.style.display = "block";
-                    appTitle.innerText = "🏆 Endergebnis 🏆";
-                } else {
-                    spectatorLiveScreen.style.display = "block";
-                    mainAppContainer.style.display = "none";
-                }
-            }
-
-            // Formular-Fokus-Schutz für Admins
-            if (document.activeElement !== correctValueInput && !data.showResults) {
-                correctValueInput.value = data.correctValue !== undefined ? data.correctValue : "";
-            }
-
-            // Rangliste sortieren, falls ausgewertet wurde
-            if (hasSolution) {
-                players.sort((a, b) => Math.abs(a.guess - correctValue) - Math.abs(b.guess - correctValue));
-            }
-
-            // Ranglisten HTML zeichnen
-            entriesList.innerHTML = '';
-            players.forEach((player, index) => {
-                const li = document.createElement('li');
-                li.className = 'entry-item';
-                
-                const isWinner = hasSolution && index === 0;
-                if (isWinner) li.classList.add('winner');
-
-                let diffHtml = '';
-                if (hasSolution) {
-                    const diff = Math.abs(player.guess - correctValue);
-                    diffHtml = `<span class="difference-text">Abweichung: ${diff}</span>`;
-                }
-
-                // Zuschauer sieht die genauen Tipps ERST, wenn die Runde ausgewertet ist!
-                const hideValue = (currentRole === "spectator" && !hasSolution);
-
-                li.innerHTML = `
-                    <span class="entry-name">
-                        ${player.name} ${isWinner ? '<span class="badge-winner">Platz 1</span>' : ''}
-                    </span>
-                    <div class="entry-details">
-                        <span class="entry-value" style="${hideValue ? 'background-color: #bdc3c7;' : ''}">
-                            ${hideValue ? '???' : player.guess}
-                        </span>
-                        ${diffHtml}
-                    </div>
-                `;
-                entriesList.appendChild(li);
-            });
+            databaseData = data;
+            renderUI(); // Aktualisiert die Ansicht jetzt JEDES Mal blitzschnell im Hintergrund!
         });
 
         nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') guessInput.focus(); });
