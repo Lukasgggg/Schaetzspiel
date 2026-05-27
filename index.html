@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Schätzspiel (Light Mode)</title>
+
+    <style>
+        :root {
+            --bg-color: #f0f2f5;         
+            --card-bg: #ffffff;          
+            --accent-color: #e67e22;      
+            --text-color: #2c3e50;        
+            --input-bg: #f8f9fa;         
+            --input-border: #dcdde1;     
+            --success-color: #2ecc71;    
+            --danger-color: #e74c3c;     
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: '-apple-system', BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        /* Perfektes Hochformat fürs Smartphone */
+        .app-container {
+            width: 100%;
+            max-width: 450px; 
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); 
+            margin-top: 10px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #f1f2f6;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.4rem;
+            color: var(--accent-color);
+        }
+
+        .btn-toggle {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* Eingabebereich */
+        .input-panel {
+            background-color: #fdfaf7;
+            border: 1px dashed var(--accent-color);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .input-panel.active {
+            display: block;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column; 
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        input {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-color);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent-color);
+            background-color: #ffffff;
+        }
+
+        .btn-submit {
+            width: 100%;
+            background-color: var(--success-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* Auflösen Bereich */
+        .solution-area {
+            background-color: #f1f2f6;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .solution-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .solution-row input {
+            flex: 1;
+            background-color: #ffffff;
+        }
+
+        .btn-reset {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        /* Liste der Schätzungen */
+        .entries-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .entry-item {
+            background-color: #ffffff;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #f1f2f6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .entry-item.winner {
+            border: 2px solid var(--success-color);
+            background-color: rgba(46, 204, 113, 0.08);
+        }
+
+        .entry-name {
+            font-weight: bold;
+            font-size: 1rem;
+            word-break: break-word;
+        }
+
+        .entry-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .entry-value {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .badge-winner {
+            background-color: var(--success-color);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .difference-text {
+            font-size: 0.75rem;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>Live Schätzen 🎯</h1>
+            <button class="btn-toggle" id="togglePanelBtn">Hinzufügen</button>
+        </header>
+
+        <div class="input-panel" id="inputPanel">
+            <div class="input-group">
+                <input type="text" id="nameInput" placeholder="Name (z.B. Lukas)" autocomplete="off">
+                <input type="number" id="guessInput" placeholder="Tipp (z.B. 134)" autocomplete="off">
+            </div>
+            <button class="btn-submit" id="submitBtn">Eintragen (Enter)</button>
+        </div>
+
+        <div class="solution-area">
+            <div class="solution-row">
+                <span style="font-size: 0.9rem; font-weight: bold;">Lösung:</span>
+                <input type="number" id="correctValueInput" placeholder="Wert..." autocomplete="off">
+            </div>
+            <button class="btn-reset" id="resetBtn">Runde zurücksetzen (Alles löschen)</button>
+        </div>
+
+        <ul class="entries-list" id="entriesList"></ul>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Deine exakten Firebase-Daten eingebunden:
+        const firebaseConfig = {
+            apiKey: "AIzaSyAsViXTzXPG-OQqO90qwc3lTD4WWkFcE3k",
+            authDomain: "schaetzspiel-1a65d.firebaseapp.com",
+            projectId: "schaetzspiel-1a65d",
+            storageBucket: "schaetzspiel-1a65d.firebasestorage.app",
+            messagingSenderId: "279249786214",
+            appId: "1:279249786214:web:9e2e9667f7ec039f07a4a7"
+        };
+
+        // Firebase initialisieren
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const docRef = doc(db, "schatzspiel", "aktuelle_runde");
+
+        const togglePanelBtn = document.getElementById('togglePanelBtn');
+        const inputPanel = document.getElementById('inputPanel');
+        const nameInput = document.getElementById('nameInput');
+        const guessInput = document.getElementById('guessInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const correctValueInput = document.getElementById('correctValueInput');
+        const entriesList = document.getElementById('entriesList');
+        const resetBtn = document.getElementById('resetBtn');
+
+        togglePanelBtn.addEventListener('click', () => {
+            inputPanel.classList.toggle('active');
+            if (inputPanel.classList.contains('active')) {
+                nameInput.focus();
+            }
+        });
+
+        async function addParticipant() {
+            const name = nameInput.value.trim();
+            const guess = parseFloat(guessInput.value.trim());
+
+            if (name === '' || isNaN(guess)) {
+                alert('Bitte Name und Schätzwert eingeben!');
+                return;
+            }
+
+            try {
+                // Versuche den Tipp dem Live-Array hinzuzufügen
+                await updateDoc(docRef, {
+                    players: arrayUnion({ name: name, guess: guess })
+                });
+            } catch (error) {
+                // Falls das Dokument in der Datenbank noch nicht existiert, erstelle es neu
+                await setDoc(docRef, {
+                    players: [{ name: name, guess: guess }],
+                    correctValue: ""
+                });
+            }
+
+            nameInput.value = '';
+            guessInput.value = '';
+            nameInput.focus();
+        }
+
+        correctValueInput.addEventListener('input', async () => {
+            const val = correctValueInput.value.trim();
+            try {
+                await updateDoc(docRef, {
+                    correctValue: val !== "" ? parseFloat(val) : ""
+                });
+            } catch (e) {}
+        });
+
+        resetBtn.addEventListener('click', async () => {
+            if(confirm("Möchtest du wirklich alle Tipps löschen und neu starten?")) {
+                await setDoc(docRef, { players: [], correctValue: "" });
+                correctValueInput.value = "";
+            }
+        });
+
+        // Echtzeit-Überwachung der Datenbank
+        onSnapshot(docRef, (snapshot) => {
+            if (!snapshot.exists()) {
+                setDoc(docRef, { players: [], correctValue: "" });
+                return;
+            }
+
+            const data = snapshot.data();
+            const players = data.players || [];
+            const correctValue = parseFloat(data.correctValue);
+            const hasSolution = !isNaN(correctValue);
+
+            if (document.activeElement !== correctValueInput) {
+                correctValueInput.value = data.correctValue !== undefined ? data.correctValue : "";
+            }
+
+            if (hasSolution) {
+                players.sort((a, b) => Math.abs(a.guess - correctValue) - Math.abs(b.guess - correctValue));
+            }
+
+            entriesList.innerHTML = '';
+            players.forEach((player, index) => {
+                const li = document.createElement('li');
+                li.className = 'entry-item';
+                
+                const isWinner = hasSolution && index === 0;
+                if (isWinner) li.classList.add('winner');
+
+                let diffHtml = '';
+                if (hasSolution) {
+                    const diff = Math.abs(player.guess - correctValue);
+                    diffHtml = `<span class="difference-text">Abweichung: ${diff}</span>`;
+                }
+
+                li.innerHTML = `
+                    <span class="entry-name">
+                        ${player.name} ${isWinner ? '<span class="badge-winner">Platz 1</span>' : ''}
+                    </span>
+                    <div class="entry-details">
+                        <span class="entry-value">${player.guess}</span>
+                        ${diffHtml}
+                    </div>
+                `;
+                entriesList.appendChild(li);
+            });
+        });
+
+        nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') guessInput.focus(); });
+        guessInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addParticipant(); });
+        submitBtn.addEventListener('click', addParticipant);
+    </script>
+</body>
+</html>
